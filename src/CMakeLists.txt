@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 set(OPENSTEAMTOOL_VERSION "${PROJECT_VERSION}" CACHE STRING "Version string embedded into OpenSteamTool.dll")
+string(REPLACE "." "," OPENSTEAMTOOL_VERSION_COMMA "${OPENSTEAMTOOL_VERSION}")
 
 # Allow CMAKE_MSVC_RUNTIME_LIBRARY to control runtime selection for all targets,
 # including dependencies pulled in via FetchContent.
@@ -33,6 +34,11 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/OpenSteamToolBuildInfo.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/OpenSteamToolBuildInfo.h"
+    @ONLY
+)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/OpenSteamToolVersion.rc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/OpenSteamToolVersion.rc"
     @ONLY
 )
 
@@ -104,6 +110,7 @@ add_subdirectory(OSTPlatform)
 # OpenSteamTool — the hook DLL injected into Steam (always 64-bit).
 add_library(OpenSteamTool SHARED
     dllmain.cpp
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/OpenSteamToolVersion.rc"
 
     # Shared utilities
     Utils/Tickets/AppTicket.cpp
@@ -185,6 +192,7 @@ target_compile_definitions(OpenSteamTool PRIVATE
 add_library(dwmapi SHARED
     dwmapi/dwmapi.cpp
     dwmapi/dwmapi.def
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/OpenSteamToolVersion.rc"
 )
 
 # ---------------------------------------------------------------------------
@@ -193,6 +201,7 @@ add_library(dwmapi SHARED
 add_library(xinput1_4 SHARED
     xinput1_4/xinput1_4.cpp
     xinput1_4/xinput1_4.def
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/OpenSteamToolVersion.rc"
 )
 
 # ---------------------------------------------------------------------------
@@ -204,5 +213,6 @@ add_library(xinput1_4 SHARED
 # ---------------------------------------------------------------------------
 add_library(version SHARED
     version/version.cpp
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/OpenSteamToolVersion.rc"
 )
 set_target_properties(version PROPERTIES SUFFIX ".dll.disabled")
