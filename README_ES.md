@@ -1,0 +1,289 @@
+> **Nota del fork:** Este es un fork optimizado de [OpenSteam001/OpenSteamTool](https://github.com/OpenSteam001/OpenSteamTool), mantenido para su uso con [huanyuejue/Fluent-Steam-Lua](https://github.com/huanyuejue/Fluent-Steam-Lua), una herramienta de gestión de la biblioteca de Steam.
+
+<div align="center">
+  <img src="docs/logo-animated.svg" width="180" alt="Logo de OpenSteamTool">
+
+  <h1>OpenSteamTool</h1>
+
+  <p>
+    <strong>Herramienta de código abierto para desbloquear Steam</strong>
+  </p>
+
+  <p>
+    <img src="https://img.shields.io/badge/C%2B%2B-20%2B-2ea44f?logo=cplusplus&logoColor=white" alt="C++ 20+">
+    <img src="https://img.shields.io/badge/CMake-3.20%2B-2ea44f?logo=cmake&logoColor=white" alt="CMake 3.20+">
+    <img src="https://img.shields.io/badge/Windows-only-d73a49?logo=windows&logoColor=white" alt="Solo Windows">
+    <a href="https://deepwiki.com/OpenSteam001/OpenSteamTool">
+      <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+    </a>
+  </p>
+
+  <p>
+    <a href="README_EN.md">
+      <img src="https://flagcdn.com/w40/us.png" width="22" alt="Bandera de Estados Unidos">
+      English
+    </a>
+    &nbsp;|&nbsp;
+    <a href="README_ES.md">
+      <img src="https://flagcdn.com/w40/es.png" width="22" alt="Bandera de España">
+      Español
+    </a>
+    &nbsp;|&nbsp;
+    <a href="README.md">
+      <img src="https://flagcdn.com/w40/cn.png" width="22" alt="Bandera de China">
+      中文
+    </a>
+  </p>
+</div>
+
+## Características
+
+### Desbloqueos principales
+- Desbloquea una cantidad ilimitada de juegos que no poseas.
+- Desbloquea todos los DLC para juegos que no poseas.
+- Soporta la carga automática de claves de descifrado de depósitos(depots) desde la configuración de Lua.
+- Soporta la descarga automática de manifiestos a través de las APIs ascendentes (upstream APIs) de `20770407` / `opensteamtool` / `steamrun` / `wudrm` / `SDM` (por defecto es 20770407, con failover automático al siguiente upstream en caso de fallo, configurable con `failover`), o mediante un endpoint personalizado de Lua (ver [Manifest a traves de Lua](#manifest-via-lua)).
+- Soporta la descarga de juegos protegidos o DLCs que requieran un token de acceso.
+- Soporta la vinculación de manifiestos para evitar que juegos específicos se actualicen.
+
+### Recarga rápida
+- Añadir, modificar, eliminar o sobrescribir archivos `.lua` en cualquier directorio supervisado activa automáticamente una recarga. No se necesita reiniciar ni alternar entre modo desconectado/conectado.
+
+### Inyección
+- Añade inyección opcional de bibliotecas en procesos de juego mediante `[inject]` en `opensteamtool.toml`.
+- Configura `enabled`, `library_x64` y `library_x86`; la biblioteca inyectada debe coincidir con la arquitectura del proceso de destino.`library_x64` y `library_x86` pueden ser rutas absolutas, o rutas relativas resueltas desde el directorio raíz de Steam.
+
+### Préstamo familiar
+- Los juegos obtenidos por préstamo familiar se pueden jugar directamente y también se pueden añadir al Lua para desbloquear DLC. Antes de informar del estado de juego, la herramienta restaura el propietario al prestador real, de modo que el informe coincide con la relación de préstamo que Steam tiene registrada.
+- Las versiones anteriores sustituían el propietario por un valor de relleno o por ti mismo. Steam no podía asociarlo a ninguna licencia, consideraba la sesión inválida, mostraba "sesión iniciada en otro lugar" y desconectaba a los pocos minutos. La 1.5.4.1 lo corrige.
+- La plaza de préstamo sigue las reglas de Steam: el juego ocupa la plaza del prestador y puede recuperarse cuando este lo necesite. La herramienta no interviene en ello.
+- Para jugar al mismo título a la vez que un familiar, ambas cuentas deben poseerlo. La herramienta solo corrige el propietario declarado, no cambia las reglas de plazas.
+
+### Compatible con juegos protegidos por Denuvo y SteamStub
+- Los juegos protegidos únicamente por SteamStub no requieren la configuración de `AppTicket`. OpenSteamTool puede reutilizar el ticket local de ConfigStore de Steam y falsificar el AppId solicitado a través de una vulnerabilidad de desbordamiento por cuatro (off-by-four ticket parsing vulnerability) en SteamDRMP, sin necesidad de inyectarse en el proceso del juego.
+- Los juegos protegidos por Denuvo siguen requiriendo datos explícitos del ticket. En `HKEY_CURRENT_USER\Software\Valve\Steam\Apps\{AppId}`, tanto `AppTicket` como `ETicket` son valores `REG_BINARY`.
+- Utiliza `setAppTicket(appid, "hex")` y `setETicket(appid, "hex")` en la configuración de Lua para escribir estos valores en el registro de forma automática.
+- La verificación de Denuvo tiene una ventana de validez de 30 minutos. Cuando esta ventana expira, la autorización puede fallar con el código de error de Denuvo `88500005`; actualiza los datos del ticket antes de volver a intentarlo.
+- Prioridad de AppTicket: los tickets explícitos tienen la prioridad más alta, incluyendo los tickets configurados por `setAppTicket` y los valores de `AppTicket` ya existentes en el registro. Si no hay ningún AppTicket explícito disponible, OpenSteamTool recurre a la ruta del ticket falsificado de ConfigStore local.
+- Prioridad de SteamID: primero lee `SteamID` como `REG_SZ`(únicamente numérico); si no se encuentra, lo analiza a partir del `AppTicket` explícito.
+
+### Extracción de tickets con `extract_tickets`
+La herramienta `extract_tickets` vuelca las cadenas hexadecimales de `AppTicket` y `ETicket` que necesitas para `setAppTicket` / `setETicket`. Ejecútala en una máquina donde Steam esté abierto e iniciado sesión en una cuenta que sea **propietaria** del juego en cuestión.
+
+1. Compila las herramientas (Revisa [Build](#build)); el binario se generará en `build/tools/Release/extract_tickets.exe`.
+2. Ejecútalo pasando el AppId del juego como argumento (o ejecútalo sin argumentos e introduce el AppId cuando se te solicite):
+   ```powershell
+   extract_tickets.exe 1361510
+   ```
+3. La herramienta leerá la ruta de instalación de Steam desde el registro, cargará `steamclient64.dll` y escribirá todo dentro de una carpeta `<appid>/` junto al ejecutable:
+   - `appticket.bin` — ticket bruto de propiedad de la aplicación (binario)
+   - `eticket.bin` — ticket cifrado bruto de la aplicación (binario)
+   - `tickets.txt` — resumen en texto plano con las cadenas hexadecimales:
+     ```
+     appid:1361510
+     appticket(184 bytes):14000000...
+     eticket(143 bytes):...
+     ```
+   Si un ticket no se puede obtener, se reportará como
+   `appticket:null` / `eticket:null`.
+4. Pega las cadenas hexadecimales de `tickets.txt` en tu configuración de Lua:
+   ```lua
+   setAppTicket(1361510, "14000000...")
+   setETicket(1361510, "...")
+   ```
+
+> **Nota:** Los tickets solo son válidos cuando se extraen de una cuenta que **realmente posee** el juego.
+
+### Estadísticas y logros
+- Activa las estadísticas y los logros para los juegos que no poseas.
+- Utiliza `setStat(appid, "steamid")` para configurar de qué SteamID se deben extraer los datos de los logros.
+- Si no hay ningún `setStat` configurado para una aplicación, OpenSteamTool consulta `https://stats.opensteamtool.com/{appid}` cuando `[stats] enable_api = true` (valor predeterminado).
+- Prioridad: `setStat` > API de estadísticas cuando está habilitada y devuelve un valor válido > SteamID predefinido `76561198028121353`.
+
+### Online Fix(Reparacion para habilitar el Online)
+- Añade `-onlinefix` a los parámetros de lanzamiento de Steam para habilitar el juego en línea basado en el AppId 480 en juegos que utilizan emparejamiento (matchmaking) por salas (lobbies). La limitación actual es que solo se puede ejecutar uno de estos juegos a la vez. Para revertirlo, simplemente elimina -onlinefix de los parámetros de lanzamiento; el juego en línea volverá a la normalidad en el próximo inicio.
+- El parámetro no exige que el juego esté en la lista de desbloqueo de Lua; los juegos que posees de forma legítima también pueden usarlo para jugar en línea.
+- Si un juego se queda colgado en la pantalla de carga, muestra una pantalla negra o falla tras el inicio de sesión, añade `-realappid` junto a él: `-onlinefix -realappid`. Con eso el juego recibe su AppId real cuando pregunta a Steam qué juego es, en lugar del 480 suplantado.
+- Ambos comportamientos los necesitan juegos distintos y no se pueden distinguir automáticamente, así que se elige por partida: deja fuera `-realappid` en los títulos que necesitan 480 para conectar, y añádelo en los que se rompen con 480.
+
+## Futuro
+- Soporte para la sincronización con Steam Cloud (este es un proyecto enorme).
+
+## Uso
+1. Ejecuta `build.bat` desde la raíz del proyecto para compilarlo.
+2. Copia los archivos generados `dwmapi.dll`, `xinput1_4.dll` y `OpenSteamTool.dll` al directorio raíz de Steam.
+> `dwmapi.dll` es la entrada de inyección por defecto: la carga `bin\vgui2_s.dll`, no la bloquea el anti-cheat de algunos juegos, por lo que se pueden jugar con normalidad (p. ej. EAC/BE); la desventaja es que los juegos que validan steamclient pueden crashear (p. ej. Onimusha / Dragon's Dogma 2 de Capcom).
+> `version.dll.disabled` es la entrada para el aislamiento en la primera carga, deshabilitada por defecto (mientras conserve el sufijo `.disabled` no se carga); para habilitarla, quita el sufijo volviendo a `version.dll` y reinicia Steam. Se carga al inicio como import estático de steam.exe, puede aislar steamclient para hookear una copia, resolviendo crasheos en algunos juegos (p. ej. Onimusha / Dragon's Dogma 2 de Capcom); la desventaja es que la bloquea el anti-cheat de algunos juegos, por lo que no se pueden jugar (p. ej. EAC/BE). Usa solo una entrada a la vez.
+3. Crea un directorio para Lua (por ejemplo, C:\steam\config\lua) y coloca allí tus scripts de Lua. La DLL los cargará y ejecutará automáticamente.
+4. Ejemplo de Lua:
+```lua
+addappid(1361510) -- desbloquea el juego con appid 1361510
+
+addappid(1361511, 0,"5954562e7f5260400040a818bc29b60b335bb690066ff767e20d145a3b6b4af0") -- desbloquea el juego con appid 1361511, la clave del depósito (depotKey) es "5954562e7f5260400040a818bc29b60b335bb690066ff767e20d145a3b6b4af0" 
+
+addtoken(1361510,"2764735786934684318") -- añade el token de acceso ("2764735786934684318") para el juego con appid 1361510 
+-- Ya no está soportado:
+--pinApp(1361510) -- fija el juego con appid 1361510 para evitar que se actualice
+
+setManifestid(1361511,"5656605350306673283") -- fija depotid:1361511 manifest_gid:5656605350306673283, el tamaño por defecto es 0
+setManifestid(1361511,"5656605350306673283", 12345678) -- lo mismo, pero con un tamaño explícito
+
+setAppTicket(1361510,"0100000000000000...") -- escribe AppTicket (REG_BINARY) en HKCU\Software\Valve\Steam\Apps\1361510\AppTicket
+
+setETicket(1361510,"0100000000000000...") -- escribe ETicket (REG_BINARY) en HKCU\Software\Valve\Steam\Apps\1361510\ETicket
+
+setStat(1361510, "76561197960287930") -- utiliza los datos de logros del SteamID especificado para el appid 1361510
+-- Si no se configura, se utiliza la API de estadísticas cuando está habilitada; de lo contrario se usa el SteamID por defecto 76561198028121353.
+```
+
+Los nombres de todas las funciones **no distinguen entre mayúsculas y minúsculas**. `setAppTicket`, `setappticket`, `SetAppticket`, `SETAPPTICKET`, etc., son todas equivalentes. Lo mismo se aplica a cada función registrada (`addAppId`, `AddToken`, `SETManifestid`, etc.).
+
+### Configuración (opcional)
+Cambia el nombre de `opensteamtool.example.toml` a `opensteamtool.toml` y colócalo en el directorio raíz de Steam (junto a `steam.exe`).
+Si no se encuentra ningún archivo de configuración, se utilizarán los valores predeterminados integrados; no se creará ninguno de forma automática.
+El archivo se supervisa mientras Steam está en ejecución; los cambios válidos se recargan en caliente sin reiniciar Steam.
+
+```toml
+[log]
+# Solo para compilaciones de depuración (Debug). Niveles: trace, debug, info, warn, error
+level = "info"
+
+[manifest]
+# API ascendente para los códigos de solicitud de manifiestos de depósito. Opciones: "20770407", "opensteamtool", "steamrun", "wudrm", "SDM"
+# url solo elige el primer upstream. Con failover activado, si falla se prueban
+# los demás en orden; un upstream fallido se omite durante 60 s. La url
+# configurada sigue siendo la primera opción.
+url = "20770407"
+# Conmutador de failover entre upstreams (recarga en caliente). false consulta solo la url anterior.
+failover = true
+
+# Tiempos de espera HTTP (timeouts) para las solicitudes de manifiestos (en milisegundos), cada uno en [1, 15000].
+# Una obtención (todos los reintentos incluidos) comparte el presupuesto de 15000 ms.
+timeout_resolve_ms = 5000
+timeout_connect_ms = 5000
+timeout_send_ms    = 10000
+timeout_recv_ms    = 10000
+
+[stats]
+# Consulta https://stats.opensteamtool.com/{appid} cuando no existe setStat en Lua.
+# Prioridad: setStat > API de estadísticas > SteamID predefinido.
+enable_api = true
+
+[presence]
+# Modo de difusión a amigos para juegos no poseídos. Opciones: "spacewar", "none"
+display = "spacewar"
+
+# Directorios adicionales de configuración de Lua (opcional).
+# Los archivos se cargan después de la carpeta predeterminada <Steam>/config/lua.
+# La carpeta predeterminada siempre se carga al final para que los archivos del usuario tengan prioridad.
+[lua]
+paths = []
+
+[inject]
+# Inyección opcional de bibliotecas en procesos de juego.
+# La biblioteca inyectada debe coincidir con la arquitectura del proceso de destino.
+enabled = false
+# library_x64 = "OpenSteamTool.GameHook.x64.dll"
+# library_x86 = "OpenSteamTool.GameHook.x86.dll"
+
+# Espejo (mirror) de metadatos opcional. Consulta "Compatibilidad con versiones de Steam" más abajo.
+[remote]
+# url_template = "https://tu.servidor/{channel}/{component}/{sha256}.toml"
+```
+### Manifiest a través de Lua
+
+Se admiten dos funciones de código de manifiesto:
+
+### `fetch_manifest_code(gid)`
+
+Función básica que recibe únicamente el GID del manifiesto.
+
+### `fetch_manifest_code_ex(app_id, depot_id, gid)` *(recomendado)*
+Función extendida que recibe `app_id`, `depot_id` y `gid`. Permite construir endpoints de API que requieran la identificación de la aplicación.
+
+El entorno de ejecución (runtime) en C++ proporciona dos funciones auxiliares de Lua:
+
+
+| Function | Signature | Returns |
+|----------|-----------|---------|
+| `http_get`  | `http_get(url [, headers])`       | `body, status_code` |
+| `http_post` | `http_post(url, body [, headers])` | `body, status_code` |
+
+`headers` es una tabla opcional: `{["Key"]="Value", ...}`.
+
+### Compatibilidad con versiones de Steam
+
+OpenSteamTool ya no incluye firmas de patrones de bytes (byte-pattern signatures) dentro de la DLL. En su lugar, en cada inicio calcula el hash SHA-256 de `steamclient64.dll` y `steamui.dll` en el disco, y busca un archivo de patrones coincidente desde el rastreador ascendente en ['OpenSteam001/steam-monitor'](https://github.com/OpenSteam001/steam-monitor) (extension `pattern`).
+
+Orden de búsqueda (cuando no existe caché local para el SHA, es decir, primer inicio tras actualizar Steam):
+
+1.**Caché local** — `<Steam>\opensteamtool\pattern\<subdir>\<sha256>.toml`. Si hay acierto se usa directamente sin contactar remotos. La caché se sobrescribe tras cada consulta remota exitosa.
+2.**jsDelivr CDN** — `https://cdn.jsdelivr.net/gh/OpenSteam001/steam-monitor@pattern/....` Fuente predeterminada.
+3.**GitHub raw** — alternativa automática cuando el espejo anterior devuelve 404 / conexión rechazada / tiempo de espera / error 5xx. No requiere configuración. Configura `[remote] order = "github-first"` para volver al orden anterior (GitHub primero).
+
+Solo cuando todos los espejos devuelven **HTTP 404** se considera que el bot ascendente aún no ha publicado un archivo TOML para esa compilación de Steam. Sin caché local, aparecerá una ventana emergente por única vez mostrando el nombre de la DLL no emparejada, su SHA-256, la ruta de caché esperada y la URL de origen. Solo se desactivarán los ganchos (hooks) vinculados a esa DLL; el resto de OpenSteamTool seguirá funcionando.
+
+También puedes colocar manualmente un archivo TOML de patrones en el directorio de la caché si conoces la estructura para una compilación determinada; el nombre del archivo debe ser `<sha256>.toml`. Se usará directamente en el próximo inicio por acierto de caché.
+
+> Se realiza una breve solicitud HTTPS saliente cuando la caché local falla (una por cada DLL: `steamclient64.dll`, `steamui.dll`). Los cuerpos descargados son diminutos (~10 KB cada uno) y el proceso se ejecuta en un hilo secundario (worker thread), por lo que nunca bloquea el cargador de Steam.
+
+#### Uso de un espejo (mirror) diferente
+
+Para la mayoría de los usuarios, la alternativa integrada de **jsDelivr -> GitHub** es suficiente. Si deseas utilizar un espejo privado o un servidor de intranet, configura una plantilla de URL completa. Un espejo personalizado reemplazará las fuentes remotas integradas; la alternativa de la caché local seguirá estando disponible.
+
+La plantilla debe incluir obligatoriamente `{channel}`, `{component}` y `{sha256}`. Los canales utilizados actualmente son `pattern` e `ipc`.
+
+```toml
+[remote]
+# Orden de espejos: "jsdelivr-first" (predeterminado) o "github-first".
+# order = "jsdelivr-first"
+url_template = "https://tu.servidor/{channel}/{component}/{sha256}.toml"
+# url_template = "https://fast.jsdelivr.net/gh/OpenSteam001/steam-monitor@{channel}/{component}/{sha256}.toml"
+```
+
+### Registro de depuración
+
+Las compilaciones de depuración (Debug) escriben archivos de registro independientes por módulo dentro de `<Steam>/opensteamtool/`:
+
+| Archivo | Fuente | Contenido |
+|---------|--------|-----------|
+| `main.log`          | General | Inicialización, carga de configuración, análisis de Lua, utilidades |
+| `ipc.log`           | `LOG_IPC_*` | Comandos IPC, despacho de InterfaceCall, suplantación (spoofing) |
+| `netpacket.log`     | `LOG_NETPACKET_*` | Envío/recepción de paquetes de red, despacho de eMsg |
+| `manifest.log`      | `LOG_MANIFEST_*` | Descarga de manifiestos, fetch_manifest_code, vinculación de manifiestos |
+| `decryptionkey.log` | `LOG_DECRYPTIONKEY_*` | Inyección de claves de descifrado de depósitos (depots) |
+| `keyvalue.log`      | `LOG_KEYVALUE_*` | Parcheo de KeyValues (vinculación de manifiestos) |
+| `misc.log`          | `LOG_MISC_*` | Captura de punteros del motor, sugerencias de AppId |
+| `achievement.log`   | `LOG_ACHIEVEMENT_*` | Solicitudes/respuestas de UserStats, suplantación de steamid |
+| `pics.log`          | `LOG_PICS_*` | Inyección de tokens de acceso PICS |
+| `package.log`       | `LOG_PACKAGE_*` | Inyección de paquetes, eventos de FileWatcher |
+| `onlinefix.log`     | `LOG_ONLINEFIX_*` | Parche en línea (suplantación del AppId 480) |
+| `richpresence.log`  | `LOG_RICHPRESENCE_*` | Construcción e inyección de paquetes Rich Presence |
+| `steamui.log`       | `LOG_STEAMUI_*` | Diagnósticos de hooks de SteamUI |
+| `pipe.log`          | `LOG_PIPE_*` | Handshakes de pipe, inspección de procesos, autorización de Denuvo, inyección de bibliotecas |
+| `platform.log`      | `LOG_PLATFORM_*` | Diagnósticos de utilidades de plataforma, incluidas operaciones sobre procesos remotos |
+
+El nivel de registro se controla mediante `[log] level` en `opensteamtool.toml`.
+
+## Compilación
+
+### Requisitos
+- Windows 10/11
+- CMake 3.20+
+- Visual Studio 2022 with MSVC (x64 toolchain)
+
+### Requisitos de ejecución
+- Acceso HTTPS saliente a los espejos de metadatos (`cdn.jsdelivr.net`, `raw.githubusercontent.com`) en el primer inicio tras una actualización de Steam (ver [Compatibilidad con versiones de Steam](#steam-version-compatibility)). Posteriormente se almacena en caché.
+
+### Compilación rápida
+```powershell
+build.bat
+```
+
+### Archivos de salida
+- Debug: `build/Debug/OpenSteamTool.dll`, `build/Debug/dwmapi.dll`, `build/Debug/xinput1_4.dll`, `build/Debug/version.dll.disabled`
+
+- Release: `build/Release/OpenSteamTool.dll`, `build/Release/dwmapi.dll`, `build/Release/xinput1_4.dll`, `build/Release/version.dll.disabled`
+
+## Descargo de responsabilidad
+Este proyecto se proporciona únicamente con fines de investigación y educativos. Eres responsable de cumplir con las leyes locales, los términos de servicio de la plataforma y las licencias de software correspondientes.

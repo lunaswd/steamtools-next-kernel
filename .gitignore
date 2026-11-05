@@ -1,0 +1,35 @@
+# Build output
+build/
+build-*/
+.deps/
+.deps-*/
+out/
+dist/
+
+# Visual Studio
+*.user
+*.suo
+*.vcxproj.user
+*.sln.user
+.vs/
+
+# IDE
+*.idea/
+*.code-workspace/
+
+# Temp files
+*.tmp
+*.log
+*.bak
+*~
+
+# DLLs (keep only source files)
+!.deps/**/*.dll
+
+# Compiled binaries and intermediate files
+*.dll
+*.exe
+*.pdb
+*.lib
+*.obj
+*.ilk
