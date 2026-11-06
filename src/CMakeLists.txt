@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(OpenSteamTool VERSION 1.5.4.1 LANGUAGES C CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompilerIncludes.cmake")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
