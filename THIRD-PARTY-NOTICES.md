@@ -29,4 +29,3 @@ The repository preserves the older maintained-source ZIP already published in
 its original history. That legacy snapshot is not the current release asset.
 Runtime compatibility with an individual Steam client or game requires separate
 verification; a successful download, PE check, or matching hash is not such proof.
-

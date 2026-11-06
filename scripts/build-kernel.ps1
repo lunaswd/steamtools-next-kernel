@@ -2,11 +2,14 @@ param(
   [ValidateSet('Release','Debug')][string]$Configuration = 'Release',
   [string]$Generator = 'Ninja Multi-Config',
   [string]$BuildDirectory = '',
-  [string]$DependencyDirectory = ''
+  [string]$DependencyDirectory = '',
+  [ValidateRange(1,64)][int]$Jobs = 6
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+# Ninja's MSVC dependency scanner needs stable include output on localized VS.
+$env:VSLANG = '1033'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $BuildDirectory) { $BuildDirectory = Join-Path $repo 'build-release' }
 if (-not $DependencyDirectory) { $DependencyDirectory = Join-Path $repo '.deps' }
@@ -28,13 +31,17 @@ foreach ($dep in $lock.dependencies) {
   if ((Test-Path -LiteralPath $source) -and $dep.PSObject.Properties['commit']) {
     $actual = (& git -C $source rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $actual -ne $dep.commit) { throw "Dependency cache revision mismatch: $($dep.name)" }
+    $modified = & git -C $source status --porcelain --untracked-files=normal
+    if ($LASTEXITCODE -ne 0 -or $modified) { throw "Dependency cache has local changes: $($dep.name)" }
   }
 }
 $configure = @('-S',(Join-Path $repo 'src'),'-B',$build,'-G',$Generator,"-DOST_DEPS_DIR=$deps","-DOPENSTEAMTOOL_VERSION=$version")
 if ($Generator -like 'Visual Studio*') { $configure += @('-A','x64') }
 & cmake @configure
 if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed' }
-& cmake --build $build --config $Configuration --parallel
+& python (Join-Path $PSScriptRoot 'package_kernel.py') --verify-dependencies --deps-dir $deps
+if ($LASTEXITCODE -ne 0) { throw 'Dependency source verification failed' }
+& cmake --build $build --config $Configuration --parallel $Jobs
 if ($LASTEXITCODE -ne 0) { throw 'CMake build failed' }
 
 $files = @()

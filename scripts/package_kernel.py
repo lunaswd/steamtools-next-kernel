@@ -8,6 +8,7 @@ import json
 import re
 import struct
 import subprocess
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -73,6 +74,8 @@ def dependency_entries(deps: Path) -> tuple[dict[str, bytes], dict[str, bytes]]:
             raise ValueError(f'Missing complete dependency sources: {name}')
         if 'commit' in dep and git('rev-parse', 'HEAD', root=source) != dep['commit']:
             raise ValueError(f'Dependency revision mismatch: {name}')
+        if 'commit' in dep and git('status', '--porcelain', '--untracked-files=normal', root=source):
+            raise ValueError(f'Dependency has modified or untracked source files: {name}')
         if name in LICENSE_FILES:
             source_name, output_name = LICENSE_FILES[name]
             notices[output_name] = (source / source_name).read_bytes()
@@ -86,6 +89,20 @@ def dependency_entries(deps: Path) -> tuple[dict[str, bytes], dict[str, bytes]]:
             tarballs = list(deps.glob('lua-subbuild/**/lua-5.5.0.tar.gz'))
             if not tarballs or digest(tarballs[0].read_bytes()) != dep['sha256']:
                 raise ValueError('Lua source archive hash mismatch or absent')
+            expected_paths = set()
+            with tarfile.open(tarballs[0], 'r:gz') as archive:
+                for member in archive.getmembers():
+                    if not member.isfile():
+                        continue
+                    rel = Path(*Path(member.name).parts[1:])
+                    if rel.is_absolute() or '..' in rel.parts:
+                        raise ValueError('Invalid Lua source archive entry')
+                    expected_paths.add(rel.as_posix())
+                    if (source / rel).read_bytes() != archive.extractfile(member).read():
+                        raise ValueError(f'Lua dependency source was modified: {rel}')
+            actual_paths = {p.relative_to(source).as_posix() for p in source.rglob('*') if p.is_file()}
+            if actual_paths != expected_paths:
+                raise ValueError('Lua dependency source contains unexpected files')
         for path in sorted(source.rglob('*')):
             rel = path.relative_to(source)
             if '.git' in rel.parts:
@@ -164,8 +181,15 @@ def main() -> None:
     parser.add_argument('--build-dir', type=Path, default=ROOT / 'build-release')
     parser.add_argument('--deps-dir', type=Path, default=ROOT / '.deps')
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'dist')
-    parser.add_argument('--release-tag', required=True)
+    parser.add_argument('--release-tag')
+    parser.add_argument('--verify-dependencies', action='store_true')
     args = parser.parse_args()
+    if args.verify_dependencies:
+        notices, sources = dependency_entries(args.deps_dir.resolve())
+        print(f'Verified locked dependency sources: {len(sources)} files, {len(notices)} notices')
+        return
+    if not args.release_tag:
+        parser.error('--release-tag is required for packaging')
     manifest = package(args.build_dir.resolve(), args.output_dir.resolve(), args.deps_dir.resolve(), args.release_tag)
     print(json.dumps({'version': manifest['version'], 'sourceCommit': manifest['sourceCommit'],
                       'asset': manifest['asset'], 'outputDirectory': str(args.output_dir.resolve())}, indent=2))
@@ -173,4 +197,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-
