@@ -22,8 +22,7 @@ set(protobuf_BUILD_PROTOC_BINARIES ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     protobuf
     GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
-    GIT_TAG        v3.15.3
-    GIT_SHALLOW    TRUE
+    GIT_TAG        983d115bd9f388468fd65d1e623b858eb12bc528
     GIT_PROGRESS   TRUE
     SOURCE_SUBDIR  cmake
 )

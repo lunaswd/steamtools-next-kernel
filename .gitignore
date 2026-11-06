@@ -33,3 +33,7 @@ dist/
 *.lib
 *.obj
 *.ilk
+
+# Python release tooling
+__pycache__/
+*.pyc

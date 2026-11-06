@@ -10,8 +10,7 @@ include(FetchContent)
 FetchContent_Declare(
     detours
     GIT_REPOSITORY https://github.com/microsoft/Detours.git
-    GIT_TAG        main
-    GIT_SHALLOW    TRUE
+    GIT_TAG        1dbd4ea281d73d478aa8d09a8b83fbd265f715f7
     GIT_PROGRESS   TRUE
     # SOURCE_SUBDIR points at a directory with no CMakeLists.txt so that
     # FetchContent_MakeAvailable downloads the source but does NOT add the

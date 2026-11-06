@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "dependencies": [
+    {"name":"lua","version":"5.5.0","url":"https://www.lua.org/ftp/lua-5.5.0.tar.gz","sha256":"57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d","license":"MIT"},
+    {"name":"detours","repository":"https://github.com/microsoft/Detours.git","commit":"1dbd4ea281d73d478aa8d09a8b83fbd265f715f7","license":"MIT"},
+    {"name":"protobuf","version":"3.15.3","repository":"https://github.com/protocolbuffers/protobuf.git","commit":"983d115bd9f388468fd65d1e623b858eb12bc528","license":"BSD-3-Clause"},
+    {"name":"spdlog","version":"1.17.0","repository":"https://github.com/gabime/spdlog.git","commit":"79524ddd08a4ec981b7fea76afd08ee05f83755d","license":"MIT","bundledFmt":true},
+    {"name":"tomlplusplus","version":"3.4.0","repository":"https://github.com/marzer/tomlplusplus.git","commit":"30172438cee64926dc41fdd9c11fb3ba5b2ba9de","license":"MIT"}
+  ]
+}

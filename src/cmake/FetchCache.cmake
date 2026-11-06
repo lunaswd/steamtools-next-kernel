@@ -35,6 +35,12 @@ set(_OST_ALL_CACHED TRUE)
 foreach(_dep IN ITEMS lua detours spdlog protobuf tomlplusplus)
     string(TOUPPER "${_dep}" _UPPER)
     set(_src "${OST_DEPS_DIR}/${_dep}-src")
+    # Corresponding-source release archives include dependency sources, so
+    # they can be configured without fetching a different upstream revision.
+    get_filename_component(_vendor "${CMAKE_CURRENT_LIST_DIR}/../../vendor/${_dep}" ABSOLUTE)
+    if(IS_DIRECTORY "${_vendor}")
+        set(_src "${_vendor}")
+    endif()
     if(IS_DIRECTORY "${_src}")
         set(FETCHCONTENT_SOURCE_DIR_${_UPPER} "${_src}" CACHE PATH
             "Pre-populated ${_dep} source dir" FORCE)

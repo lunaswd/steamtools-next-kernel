@@ -10,8 +10,7 @@ include(FetchContent)
 FetchContent_Declare(
     tomlplusplus
     GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-    GIT_TAG        v3.4.0
-    GIT_SHALLOW    TRUE
+    GIT_TAG        30172438cee64926dc41fdd9c11fb3ba5b2ba9de
     GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(tomlplusplus)

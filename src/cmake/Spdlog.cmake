@@ -19,8 +19,7 @@ set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.17.0
-    GIT_SHALLOW    TRUE
+    GIT_TAG        79524ddd08a4ec981b7fea76afd08ee05f83755d
     GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(spdlog)
