@@ -55,9 +55,14 @@ cmake --build build --config Release --parallel
 
 ## 自动发布
 
-`.github/workflows/main.yml` 在推送 `vVERSION` tag 时构建，也支持对已存在 tag 的手动执行。
-它构建带 Windows 版本资源的 Release DLL，校验来源与哈希，上传二进制、完整源码和发布清单。
-发布文件不自动覆盖已有同名资产；修订发布应更新源码版本并使用新 tag。
+`.github/workflows/main.yml` 在每次向 `main` 推送源码后自动构建正式版本，也支持手动执行。
+它根据基础四段版本、工作流运行号与已有数字版本标签分配递增版本，在独立的 detached
+提交中记录版本和原始源码提交，构建带 Windows 版本资源的 Release DLL，再推送该发布 tag。
+维护分支不会被自动版本提交修改；tag 推送不会重新触发此工作流，因此不会形成构建循环。
+`kernel-release.json`、PE 版本和完整源码归档均对应同一个发布提交；`RELEASE_BUILD.json`
+记录原始源码提交与工作流运行身份，同一运行重试时复用已经存在的发布 tag。
+全部资产上传并通过 GitHub 的 SHA-256/大小检查后，草稿 Release 才转为公开最新版。
+已发布的同名资产不覆盖，较早的慢构建也不会把较新的 Release 降级为旧最新版。
 旧源码快照 `OpenSteamTool-1.5.4.1-maintained-source.zip` 保留以维护既有历史，不作为新安装来源。
 
 ## 许可与验证范围

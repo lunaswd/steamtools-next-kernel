@@ -1,28 +1,24 @@
-name: Kernel release
+name: Build and publish latest kernel
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Existing release tag matching src/CMakeLists.txt, for example v1.5.4.1'
-        required: true
 
 permissions:
   contents: write
 
 concurrency:
-  group: kernel-release-${{ github.event.inputs.tag || github.ref_name }}
+  group: kernel-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   release:
     runs-on: windows-2022
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -32,34 +28,27 @@ jobs:
           python-version: '3.12'
       - name: Validate release tooling
         run: python -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Prepare version-bound release sources
+        id: version
+        run: python scripts/release_version.py --kind kernel
       - name: Build locked Release sources
         shell: pwsh
         run: ./scripts/build-kernel.ps1 -Configuration Release
       - name: Package binary and complete corresponding sources
         shell: pwsh
         env:
-          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ steps.version.outputs.releaseTag }}
         run: python scripts/package_kernel.py --release-tag "$env:RELEASE_TAG"
       - uses: actions/upload-artifact@v4
         with:
-          name: kernel-release-assets
+          name: kernel-release-${{ steps.version.outputs.version }}
           path: dist/*
           if-no-files-found: error
-      - name: Publish immutable tagged release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          fail_on_unmatched_files: true
-          generate_release_notes: true
-          overwrite_files: false
-          body: |
-            SteamTools Next downloads kernel-release.json and the verified Windows x64 ZIP from this release.
-
-            The matching complete kernel and dependency source code is provided in the source ZIP. See LICENSE and THIRD-PARTY-NOTICES.md.
-
-            File installation, hash matching and runtime compatibility are separate checks. Choose one injection entry and retain backups.
-          files: |
-            dist/steamtools-next-kernel-*-windows-x64.zip
-            dist/steamtools-next-kernel-*-source.zip
-            dist/kernel-release.json
-            dist/release-SHA256SUMS.txt
+      - name: Push only the release source tag
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.releaseTag }}
+        run: git push origin "refs/tags/$env:RELEASE_TAG"
+      - name: Publish complete verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/publish_release.py --kind kernel --directory dist
