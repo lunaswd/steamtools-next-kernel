@@ -45,12 +45,18 @@ if ($LASTEXITCODE -ne 0) { throw 'Dependency source verification failed' }
 if ($LASTEXITCODE -ne 0) { throw 'CMake build failed' }
 
 $files = @()
+function Get-Sha256([string]$Path) {
+  $stream = [IO.File]::OpenRead($Path)
+  $hash = [Security.Cryptography.SHA256]::Create()
+  try { return ([BitConverter]::ToString($hash.ComputeHash($stream))).Replace('-','').ToLowerInvariant() }
+  finally { $stream.Dispose(); $hash.Dispose() }
+}
 foreach ($name in @('OpenSteamTool.dll','dwmapi.dll','xinput1_4.dll','version.dll.disabled')) {
   $path = Join-Path (Join-Path $build $Configuration) $name
   if (-not (Test-Path -LiteralPath $path)) { throw "Missing kernel build output: $name" }
   $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($path)
   if ($info.FileVersion -ne $version) { throw "PE file version mismatch: $name" }
-  $files += [ordered]@{ name=$name; sizeBytes=(Get-Item -LiteralPath $path).Length; sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() }
+  $files += [ordered]@{ name=$name; sizeBytes=(Get-Item -LiteralPath $path).Length; sha256=(Get-Sha256 $path) }
 }
 $record = [ordered]@{ schemaVersion=1; version=$version; configuration=$Configuration; platform='windows-x64'; sourceCommit=$sourceCommit; files=$files }
 $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $build 'kernel-build.json') -Encoding utf8
